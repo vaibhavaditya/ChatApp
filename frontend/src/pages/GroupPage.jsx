@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import io from "socket.io-client";
+import axios from "axios";
 
-// socket setup
 const socket = io("http://localhost:3000", {
   withCredentials: true,
   autoConnect: false,
@@ -10,112 +10,105 @@ const socket = io("http://localhost:3000", {
 
 const GroupPage = () => {
   const { state } = useLocation();
-  const [groupMessages, setGroupMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
-
-  if (!state) return <p className="p-4">No group data found.</p>;
-
-  const { groupId, groupname, messages, members, admins, owner } = state;
+  const { receiver_id, groupName } = state || {};
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    // normalize and set initial messages
-    const normalizedMessages = messages.map((msg) => ({
-      content: msg.message?.content,
-      createdAt: msg.message?.createdAt,
-      username: msg.username || "Unknown",
-    }));
-    setGroupMessages(normalizedMessages);
+    const fetchGroupChat = async () => {
+      try {
+        const userRes = await axios.get("/api/users/me", {
+          withCredentials: true,
+        });
+        setCurrentUser(userRes.data.data);
 
-    socket.connect();
-    socket.emit("join-group", groupId);
+        const res = await axios.get(`/api/messages/group/${receiver_id}`, {
+          withCredentials: true,
+        });
 
-    socket.on("received-message", (msg) => {
-      // handle only messages meant for this group
-      if (msg?.message?.receiverGroup === groupId) {
-        setGroupMessages((prev) => [
+        setMessages(res.data.data);
+        socket.connect();
+        socket.emit("join-group", receiver_id);
+      } catch (error) {
+        console.error("Error fetching group messages", error);
+      }
+    };
+
+    fetchGroupChat();
+
+    const handleReceivedMessage = (data) => {
+      if (data.message?.receiverGroup === receiver_id) {
+        setMessages((prev) => [
           ...prev,
           {
-            content: msg.message?.content,
-            createdAt: msg.message?.createdAt,
-            username: msg.username || "Unknown",
+            ...data.message,
+            senderDetails: {
+              username: data.username,
+              email: data.email,
+            },
           },
         ]);
       }
-    });
+    };
 
-    
+    socket.on("received-message", handleReceivedMessage);
 
     return () => {
+      socket.off("received-message", handleReceivedMessage);
       socket.disconnect();
-      socket.off("received-message");
     };
-  }, [groupId, messages]);
+  }, [receiver_id]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-    const msg = {
-      content: newMessage,
-      receiver_id: groupId,
+  const sendMessage = () => {
+    if (input.trim() === "") return;
+
+    socket.emit("send-message", {
+      content: input,
+      receiver_id,
       isGroup: true,
-    };
+    });
 
-    socket.emit("send-message", msg);
-    setNewMessage("");
-    console.log(groupMessages);
-    
+    setInput("");
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-2">Group: {groupname}</h2>
-      <p className="mb-2 text-gray-600">
-        <strong>Group ID:</strong> {groupId}
-      </p>
-
-      <div className="mb-4">
-        <strong>Owner:</strong> {owner?.username || "Unknown"} ({owner?.email || "N/A"})
-        <br />
-        <strong>Admins:</strong>{" "}
-        {admins?.length > 0 ? admins.map((a) => a.username).join(", ") : "None"}
-        <br />
-        <strong>Members:</strong>{" "}
-        {members?.length > 0 ? members.map((m) => m.username).join(", ") : "None"}
+    <div className="p-4 max-w-2xl mx-auto">
+      <h2 className="text-xl font-bold mb-4 text-center">{groupName}</h2>
+      <div className="bg-gray-50 h-[70vh] overflow-y-auto p-4 rounded-md space-y-2 border">
+        {messages.map((msg, index) => (
+          <div
+            key={msg._id || index}
+            className={`max-w-[80%] p-2 rounded-lg ${
+              msg.sender === currentUser?._id
+                ? "bg-green-100 self-end ml-auto"
+                : "bg-gray-200"
+            }`}
+          >
+            <p className="text-sm">{msg.content}</p>
+            <p className="text-xs text-gray-500 text-right mt-1">
+              {msg.senderDetails?.username}
+            </p>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
       </div>
-
-      <div className="space-y-4 max-h-[400px] overflow-y-auto mb-4 border p-2 rounded">
-        {groupMessages.length === 0 ? (
-          <p className="text-gray-500">No messages yet.</p>
-        ) : (
-          groupMessages.map((msg, index) => (
-            <div key={index} className="p-3 border rounded bg-gray-50">
-              <p>
-                <strong>{msg.username}</strong>: {msg.content || "No message"}
-              </p>
-              {msg.createdAt && (
-                <p className="text-sm text-gray-500">
-                  {new Date(msg.createdAt).toLocaleString("en-IN", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </p>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="flex gap-2">
-        <textarea
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1 border rounded p-2 resize-none"
-          rows={2}
+      <div className="flex mt-4 gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="flex-1 border rounded px-3 py-2"
+          placeholder="Type a message"
         />
         <button
-          onClick={handleSendMessage}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          onClick={sendMessage}
+          className="bg-green-500 text-white px-4 py-2 rounded"
         >
           Send
         </button>

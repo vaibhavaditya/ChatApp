@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import io from "socket.io-client";
+import axios from "axios";
 
 const socket = io("http://localhost:3000", {
   withCredentials: true,
@@ -9,101 +10,99 @@ const socket = io("http://localhost:3000", {
 
 const ChatPage = () => {
   const { state } = useLocation();
-  const [chatMessages, setChatMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
-
-  if (!state) return <p className="p-4">No chat data found.</p>;
-
-  const { userId, username, email, messages } = state;
+  console.log(state);
+  
+  const { receiver_id, username } = state || {};
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const normalized = messages.map((msg) => ({
-      content: msg.message?.content,
-      createdAt: msg.message?.createdAt,
-      username: msg.username || "Unknown",
-    }));
-    setChatMessages(normalized);
+  const fetchChat = async () => {
+    try {
+      const userRes = await axios.get("/api/users/me", { withCredentials: true });
+      setCurrentUser(userRes.data.data);
 
-    socket.connect();
+      const msgRes = await axios.get(`/api/messages/user/${receiver_id}`, {
+        withCredentials: true,
+      });
+      setMessages(msgRes.data.data);
+      socket.connect();
+    } catch (error) {
+      console.error("Error fetching chat:", error);
+    }
+  };
 
-    socket.on("received-message", (msg) => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          content: msg.message?.content,
-          createdAt: msg.message?.createdAt,
-          username: msg.username || "Unknown",
-        },
+  fetchChat();
+
+  // Define message handler separately
+  const handleReceivedMessage = (data) => {
+    if (data.message?.receiverUser === receiver_id || data.message?.sender === receiver_id) {
+      setMessages((prev) => [
+        ...prev, 
+        { 
+          ...data.message, 
+          senderDetails: { 
+            username: data.username, 
+            email: data.email 
+          } 
+        }
       ]);
-    });
+    }
+  };
 
-    return () => {
-      socket.disconnect();
-      socket.off("received-message");
-    };
-  }, [userId, messages]);
+  socket.on("received-message", handleReceivedMessage);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
+  // Cleanup: remove specific listener and disconnect
+  return () => {
+    socket.off("received-message", handleReceivedMessage);
+    socket.disconnect();
+  };
+}, [receiver_id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = () => {
+    if (input.trim() === "") return;
 
     socket.emit("send-message", {
-      content: newMessage,
-      receiver_id: userId,
+      content: input,
+      receiver_id,
       isGroup: false,
     });
 
-    setNewMessage("");
+    setInput("");
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-2">Chat with {username}</h2>
-      <p className="mb-4 text-gray-600">Email: {email}</p>
-
-      <div className="space-y-4 max-h-[400px] overflow-y-auto mb-4 border p-2 rounded">
-        {chatMessages.length === 0 ? (
-          <p className="text-gray-500">No messages yet.</p>
-        ) : (
-          chatMessages.map((msg, index) => {
-            const isReceived = msg.username === username;
-
-            return (
-              <div
-                key={index}
-                className={`p-4 border rounded ${
-                  isReceived ? "bg-blue-100 text-right ml-auto" : "bg-gray-50 text-left mr-auto"
-                }`}
-                style={{ maxWidth: "70%" }}
-              >
-                <p>
-                  <strong>{msg.username}</strong>: {msg.content}
-                </p>
-                {msg.createdAt && (
-                  <p className="text-sm text-gray-500">
-                    {new Date(msg.createdAt).toLocaleString("en-IN", {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </p>
-                )}
-              </div>
-            );
-          })
-        )}
+    <div className="p-4 max-w-2xl mx-auto">
+      <h2 className="text-xl font-bold mb-4 text-center">{state.username}</h2>
+      <div className="bg-gray-50 h-[70vh] overflow-y-auto p-4 rounded-md space-y-2 border">
+        {messages.map((msg,index) => (
+          <div
+            key={index}
+            className={`max-w-[80%] p-2 rounded-lg ${
+              msg.sender === currentUser._id ? "bg-indigo-100 self-end ml-auto" : "bg-gray-200"
+            }`}
+          >
+            <p className="text-sm">{msg.content}</p>
+            <p className="text-xs text-gray-500 text-right mt-1">{msg.senderDetails?.username}</p>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
       </div>
-
-      <div className="flex gap-2">
-        <textarea
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1 border rounded p-2 resize-none"
-          rows={2}
+      <div className="flex mt-4 gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="flex-1 border rounded px-3 py-2"
+          placeholder="Type a message"
         />
-        <button
-          onClick={handleSendMessage}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
+        <button onClick={sendMessage} className="bg-indigo-500 text-white px-4 py-2 rounded">
           Send
         </button>
       </div>

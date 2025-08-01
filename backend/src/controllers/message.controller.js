@@ -9,16 +9,17 @@ const fetchAllUsersAndGroups = asyncHandler(async (req, res) => {
 
     const allUsersAndGroups = await Message.aggregate([
         {
-            $match:{
-                $or:[
-                    {sender: userId},
-                    {receiverUser: userId},
-                    {receiverGroup: {$exists: true}}
+            $match: {
+                $or: [
+                    { sender: userId },
+                    { receiverUser: userId },
+                    { receiverGroup: { $exists: true } }
                 ]
             }
         },
+        // Sender details
         {
-            $lookup:{
+            $lookup: {
                 from: "users",
                 localField: "sender",
                 foreignField: "_id",
@@ -26,13 +27,29 @@ const fetchAllUsersAndGroups = asyncHandler(async (req, res) => {
             }
         },
         {
-            $unwind:{
+            $unwind: {
                 path: "$senderDetails",
-                preserveNullAndEmptyArrays: true                
+                preserveNullAndEmptyArrays: true
+            }
+        },
+        // Receiver user details
+        {
+            $lookup: {
+                from: "users",
+                localField: "receiverUser",
+                foreignField: "_id",
+                as: "receiverUserDetails"
             }
         },
         {
-            $lookup:{
+            $unwind: {
+                path: "$receiverUserDetails",
+                preserveNullAndEmptyArrays: true
+            }
+        },
+        // Group details
+        {
+            $lookup: {
                 from: "groups",
                 localField: "receiverGroup",
                 foreignField: "_id",
@@ -40,18 +57,18 @@ const fetchAllUsersAndGroups = asyncHandler(async (req, res) => {
             }
         },
         {
-            $unwind:{
+            $unwind: {
                 path: "$groupDetails",
-                preserveNullAndEmptyArrays: true                
+                preserveNullAndEmptyArrays: true
             }
         },
         {
             $match: {
-                $or:[
-                    {receiverGroup: null},
-                    {"groupDetails.members": userId},
-                    {"groupDetails.owner": userId}
-                ] 
+                $or: [
+                    { receiverGroup: null },
+                    { "groupDetails.members": userId },
+                    { "groupDetails.owner": userId }
+                ]
             }
         },
         {
@@ -63,54 +80,57 @@ const fetchAllUsersAndGroups = asyncHandler(async (req, res) => {
                 receiverGroup: 1,
                 "senderDetails.username": 1,
                 "senderDetails.email": 1,
+                "receiverUserDetails.username": 1,
+                "receiverUserDetails.email": 1,
                 "groupDetails.name": 1,
                 "groupDetails.members": 1,
                 "groupDetails.admins": 1,
                 "groupDetails.owner": 1
             }
         }
-    ])
+    ]);
 
-    if(!allUsersAndGroups){
-        throw new ApiError(403,"Cannot find the users and groups")
+    if (!allUsersAndGroups) {
+        throw new ApiError(403, "Cannot find the users and groups");
     }
 
     return res
-    .status(200)
-    .json(new ApiResponse(200,allUsersAndGroups,"All the users and group"))
+        .status(200)
+        .json(new ApiResponse(200, allUsersAndGroups, "All the users and groups"));
 });
 
 const fetchAllMessagesfromUser = asyncHandler(async (req, res) => {
-    const { receiver_id } = req.params
+    const { receiver_id } = req.params;
     const userId = req.user._id;
 
     if (!isValidObjectId(receiver_id)) {
         throw new ApiError(401, "Invalid receiver ID");
     }
-    
+
     const messages = await Message.aggregate([
         {
-            $match:{
-                $or:[
-                    {sender: userId, receiverUser: new mongoose.Types.ObjectId(receiver_id)},
-                    {sender: new mongoose.Types.ObjectId(receiver_id), receiverUser: userId},
+            $match: {
+                $or: [
+                    { sender: userId, receiverUser: new mongoose.Types.ObjectId(receiver_id) },
+                    { sender: new mongoose.Types.ObjectId(receiver_id), receiverUser: userId },
                 ]
             }
         },
         {
-            $sort: {createdAt: 1}
+            $sort: { createdAt: 1 }
         },
+        // Lookup for senderDetails
         {
-            $lookup:{
+            $lookup: {
                 from: "users",
                 localField: "sender",
                 foreignField: "_id",
                 as: "senderDetails",
-                pipeline:[
+                pipeline: [
                     {
-                        $project:{
+                        $project: {
                             username: 1,
-                            email: 1,
+                            email: 1
                         }
                     }
                 ]
@@ -119,26 +139,51 @@ const fetchAllMessagesfromUser = asyncHandler(async (req, res) => {
         {
             $unwind: "$senderDetails"
         },
+        // Lookup for receiverUserDetails
         {
-            $project:{
+            $lookup: {
+                from: "users",
+                localField: "receiverUser",
+                foreignField: "_id",
+                as: "receiverUserDetails",
+                pipeline: [
+                    {
+                        $project: {
+                            username: 1,
+                            email: 1
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            $unwind: {
+                path: "$receiverUserDetails",
+                preserveNullAndEmptyArrays: true // In case of group messages
+            }
+        },
+        {
+            $project: {
                 sender: 1,
                 receiverUser: 1,
-                createdAt: 1,
                 content: 1,
-                senderDetails: 1
+                createdAt: 1,
+                senderDetails: 1,
+                receiverUserDetails: 1
             }
         }
-    ])
+    ]);
 
-    if(!Array.isArray(messages)){
-        throw new ApiError(403,"Pipelines cannot be created")
+    if (!Array.isArray(messages)) {
+        throw new ApiError(403, "Pipelines cannot be created");
     }
-
+    // console.log(messages);
+    
     return res
-    .status(200)
-    .json(new ApiResponse(200,messages,"All the messages in the chat"));
-
+        .status(200)
+        .json(new ApiResponse(200, messages, "All the messages in the chat"));
 });
+
 
 const fetchAllMessagesfromGroup = asyncHandler(async (req, res) => {
     const { group_id } = req.params
