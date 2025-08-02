@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { formatDistanceToNow } from "date-fns";
@@ -11,7 +11,11 @@ const Home = () => {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
+  const searchContainerRef = useRef(null);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -27,14 +31,11 @@ const Home = () => {
           withCredentials: true,
         });
         const rawMessages = res.data.data;
-        // console.log("Response: ",rawMessages);
         
         const oneToOneMap = {};
         const groupChats = {};
 
-        // Process messages
         for (const msg of rawMessages) {
-          // Skip messages without required info
           if (!msg.sender || !msg.createdAt) continue;
           
           if (msg.receiverUser) {
@@ -42,7 +43,6 @@ const Home = () => {
             const userB = msg.receiverUser;
             const otherUserId = userA === myId ? userB : userA;
             
-            // Skip self-messages
             if (otherUserId === myId) continue;
             
             const key = [myId, otherUserId].sort().join('-');
@@ -70,7 +70,6 @@ const Home = () => {
           }
         }
 
-        // Convert to sorted arrays
         const oneToOneList = Object.values(oneToOneMap)
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         
@@ -92,10 +91,59 @@ const Home = () => {
     fetchMessages();
   }, []);
 
-  // Generate avatar from username
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const searchUsers = async () => {
+      try {
+        setIsSearching(true);
+        const res = await axios.get(`/api/users/search?username=${searchTerm}`, {
+          withCredentials: true,
+        });
+        const filteredResults = res.data.data.filter(user => user._id !== currentUserId);
+        setSearchResults(filteredResults);
+      } catch (err) {
+        console.error("Search error:", err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    const timerId = setTimeout(searchUsers, 300);
+    return () => clearTimeout(timerId);
+  }, [searchTerm, currentUserId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        setSearchTerm('');
+        setSearchResults([]);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const getAvatar = (name) => {
     const names = name.split(' ');
     return names.map(n => n[0]).join('').toUpperCase();
+  };
+
+  const handleUserClick = (userId, username) => {
+    navigate(`/chat/${userId}`, {
+      state: {
+        receiver_id: userId,
+        username: username,
+        isGroup: false,
+      },
+    });
+    setSearchTerm('');
+    setSearchResults([]);
   };
 
   return (
@@ -106,6 +154,47 @@ const Home = () => {
         </h1>
         <div className="w-16 h-1 bg-indigo-500 mt-2 rounded-full"></div>
       </header>
+
+      {/* Search Bar */}
+      <div className="relative mb-8" ref={searchContainerRef}>
+        <input
+          type="text"
+          placeholder="Search users..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        
+        {searchTerm && (
+          <div className="absolute top-full left-0 right-0 bg-white shadow-lg rounded-lg mt-1 max-h-60 overflow-auto z-10">
+            {isSearching ? (
+              <div className="p-4 text-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-500 mx-auto"></div>
+              </div>
+            ) : searchResults.length === 0 ? (
+              <div className="p-4 text-center text-gray-500">No users found</div>
+            ) : (
+              searchResults.map((user) => (
+                <div
+                  key={user._id}
+                  className="p-3 hover:bg-gray-100 cursor-pointer flex items-center space-x-3"
+                  onClick={() => handleUserClick(user._id, user.username)}
+                >
+                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <span className="text-indigo-700 font-bold">
+                      {getAvatar(user.username)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{user.username}</p>
+                    <p className="text-sm text-gray-500">{user.email}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -239,4 +328,4 @@ const Home = () => {
   );
 };
 
-export default Home; 
+export default Home;

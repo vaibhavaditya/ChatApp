@@ -23,7 +23,7 @@ const createGroup = asyncHandler(async (req, res) => {
 const AddMembersToGroup = asyncHandler(async (req, res) => {
     const { member_id } = req.params;
     const group = req.resource;
-    console.log(group);
+    // console.log(group);
     if (!isValidObjectId(member_id)) {
         throw new ApiError(400, "Invalid member ID");
     }

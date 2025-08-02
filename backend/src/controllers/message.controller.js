@@ -275,6 +275,7 @@ const fetchAllMessagesfromGroup = asyncHandler(async (req, res) => {
                 createdAt: 1,
                 content: 1,
                 senderDetails: 1,
+                groupDetails:1,
                 senderRole: 1
             }
         }
