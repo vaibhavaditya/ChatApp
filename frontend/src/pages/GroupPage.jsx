@@ -19,12 +19,14 @@ const GroupPage = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [groupDetails, setGroupDetails] = useState({
-    owner: "",
-    members: [],
-    admins: []
+    _id: "",
+    name: "",
+    membersDeatils: [],
+    adminsDeatils: [],
+    owner: null,
   });
+
   const messagesEndRef = useRef(null);
-  console.log(messages);
 
   useEffect(() => {
     const fetchGroupChat = async () => {
@@ -38,27 +40,12 @@ const GroupPage = () => {
           withCredentials: true,
         });
 
-        setMessages(res.data.data);
-        
-        const owners = new Set();
-        const admins = new Set();
-        const members = new Set();
-
-        for (let message of res.data.data) {
-          if (message.senderRole === "owner") {
-            owners.add(message.sender);
-          } else if (message.senderRole === "admin") {
-            admins.add(message.sender);
-          } else {
-            members.add(message.sender);
-          }
-        }
-
-        setGroupDetails({
-          owner: [...owners][0] || "",
-          admins: [...admins],
-          members: [...members]
+        const details = await axios.get(`/api/groups/groupDetails/${receiver_id}`, {
+          withCredentials: true,
         });
+
+        setGroupDetails(details.data.data);
+        setMessages(res.data.data);
 
         socket.connect();
         socket.emit("join-group", receiver_id);
@@ -104,7 +91,7 @@ const GroupPage = () => {
 
     try {
       const response = await axios.get(`/api/users/search?username=${searchQuery}`, {
-        withCredentials: true
+        withCredentials: true,
       });
       setSearchResults(response.data.data);
     } catch (error) {
@@ -138,9 +125,73 @@ const GroupPage = () => {
       setSelectedUser(null);
       setSearchQuery("");
       setSearchResults([]);
+      refreshGroupDetails();
     } catch (error) {
       console.error("Failed to add member:", error);
       alert("Error adding member");
+    }
+  };
+
+  const refreshGroupDetails = async () => {
+    try {
+      const details = await axios.get(`/api/groups/groupDetails/${receiver_id}`, {
+        withCredentials: true,
+      });
+      setGroupDetails(details.data.data);
+    } catch (error) {
+      console.error("Error refreshing group details", error);
+    }
+  };
+
+  const handleRemoveMember = async (id) => {
+    try {
+      await axios.delete(`/api/groups/members/${receiver_id}/${id}`, {
+        withCredentials: true,
+      });
+      alert("Member removed");
+      refreshGroupDetails();
+    } catch (error) {
+      console.error("Error removing member", error);
+      alert("Error removing member");
+    }
+  };
+
+  const handlePromoteToAdmin = async (id) => {
+    try {
+      await axios.patch(`/api/groups/admins/${receiver_id}/${id}`, {}, {
+        withCredentials: true,
+      });
+      alert("Member promoted to admin");
+      refreshGroupDetails();
+    } catch (error) {
+      console.error("Error promoting to admin", error);
+      alert("Error promoting member");
+    }
+  };
+
+  const handleRemoveAdmin = async (id) => {
+    try {
+      await axios.delete(`/api/groups/admins/${receiver_id}/${id}`, {
+        withCredentials: true,
+      });
+      alert("Admin removed from group");
+      refreshGroupDetails();
+    } catch (error) {
+      console.error("Error removing admin", error);
+      alert("Error removing admin");
+    }
+  };
+
+  const handleDemoteToMember = async (id) => {
+    try {
+      await axios.delete(`/api/groups/admins/remove/${receiver_id}/${id}`, {
+        withCredentials: true,
+      });
+      alert("Admin demoted to member");
+      refreshGroupDetails();
+    } catch (error) {
+      console.error("Error demoting admin", error);
+      alert("Error demoting admin");
     }
   };
 
@@ -158,11 +209,12 @@ const GroupPage = () => {
   };
 
   return (
-    <div className="p-4 max-w-2xl mx-auto">
-      <h2 className="text-xl font-bold mb-4 text-center">{groupName}</h2>
-
-      <div className="mt-6 pt-4">
-        <div className="w-full max-w-md mx-auto">
+    <div className="flex h-screen overflow-hidden">
+      {/* LEFT SIDEBAR */}
+      <div className="w-1/4 bg-white border-r p-4 overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4">{groupName}</h2>
+        {/* Add Member */}
+        <div className="w-full max-w-md">
           <h3 className="text-lg font-semibold mb-2">Add Member to Group</h3>
           <div className="flex gap-2 items-center mb-2">
             <input
@@ -184,9 +236,11 @@ const GroupPage = () => {
           {searchResults.length > 0 && (
             <div className="mb-4 border rounded p-2 max-h-40 overflow-y-auto">
               {searchResults.map((user) => (
-                <div 
+                <div
                   key={user._id}
-                  className={`p-2 cursor-pointer hover:bg-gray-100 ${selectedUser?._id === user._id ? 'bg-blue-50' : ''}`}
+                  className={`p-2 cursor-pointer hover:bg-gray-100 ${
+                    selectedUser?._id === user._id ? "bg-blue-50" : ""
+                  }`}
                   onClick={() => setSelectedUser(user)}
                 >
                   <p className="font-medium">{user.username}</p>
@@ -206,48 +260,115 @@ const GroupPage = () => {
           <button
             onClick={handleAddMember}
             disabled={!selectedUser}
-            className={`w-full py-2 rounded ${selectedUser ? 'bg-green-500 text-white' : 'bg-gray-300 cursor-not-allowed'}`}
+            className={`w-full py-2 rounded ${
+              selectedUser ? "bg-green-500 text-white" : "bg-gray-300 cursor-not-allowed"
+            }`}
           >
             Add Member
           </button>
         </div>
+        <div className="mb-4">
+          <p className="font-semibold text-gray-700">Group Name:</p>
+          <p className="text-gray-800">{groupDetails.name}</p>
+        </div>
+
+        <div className="mb-4">
+          <p className="font-semibold text-gray-700">Owner:</p>
+          <p className="text-gray-800">
+            {groupDetails.owner?.username} ({groupDetails.owner?.email})
+          </p>
+        </div>
+
+        <div className="mb-4">
+          <p className="font-semibold text-gray-700">Admins:</p>
+          <ul className="list-disc list-inside text-gray-800 space-y-2">
+            {groupDetails.adminsDeatils.map((admin) => (
+              <li key={admin._id} className="flex justify-between items-center">
+                <span>{admin.username}</span>
+                <div className="space-x-1">
+                  <button
+                    onClick={() => handleDemoteToMember(admin._id)}
+                    className="bg-yellow-400 text-white px-2 py-1 rounded text-sm"
+                  >
+                    Demote
+                  </button>
+                  <button
+                    onClick={() => handleRemoveAdmin(admin._id)}
+                    className="bg-red-500 text-white px-2 py-1 rounded text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <p className="font-semibold text-gray-700">Members:</p>
+          <ul className="list-disc list-inside text-gray-800 space-y-2">
+            {groupDetails.membersDeatils.map((member) => (
+              <li key={member._id} className="flex justify-between items-center">
+                <span>{member.username}</span>
+                <div className="space-x-1">
+                  <button
+                    onClick={() => handlePromoteToAdmin(member._id)}
+                    className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
+                  >
+                    Promote
+                  </button>
+                  <button
+                    onClick={() => handleRemoveMember(member._id)}
+                    className="bg-red-500 text-white px-2 py-1 rounded text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        
       </div>
 
-      <div className="bg-gray-50 h-[60vh] overflow-y-auto p-4 rounded-md space-y-2 border mt-4">
-        {messages.map((msg, index) => (
-          <div
-            key={msg._id || index}
-            className={`max-w-[80%] p-2 rounded-lg ${
-              msg.sender === currentUser?._id
-                ? "bg-green-100 self-end ml-auto"
-                : "bg-gray-200"
-            }`}
+      {/* RIGHT CHAT AREA */}
+      <div className="w-3/4 p-4 flex flex-col">
+        <div className="flex-1 overflow-y-auto bg-gray-50 p-4 rounded-md space-y-2 border mb-4">
+          {messages.map((msg, index) => (
+            <div
+              key={msg._id || index}
+              className={`max-w-[80%] p-2 rounded-lg ${
+                msg.sender === currentUser?._id
+                  ? "bg-green-100 self-end ml-auto"
+                  : "bg-gray-200"
+              }`}
+            >
+              <p className="text-sm">{msg.content}</p>
+              <p className="text-xs text-gray-500 text-right mt-1">
+                <strong>{msg.senderDetails?.username}</strong> {formatTimestamp(msg.createdAt)}
+              </p>
+            </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyUp={(e) => e.key === "Enter" && sendMessage()}
+            className="flex-1 border rounded px-3 py-2"
+            placeholder="Type a message"
+          />
+          <button
+            onClick={sendMessage}
+            className="bg-green-500 text-white px-4 py-2 rounded"
           >
-            <p className="text-sm">{msg.content}</p>
-            <p className="text-xs text-gray-500 text-right mt-1">
-              <strong>{msg.senderDetails?.username} </strong>{" "}
-              {formatTimestamp(msg.createdAt)}
-            </p>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="flex mt-4 gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyUp={(e) => e.key === "Enter" && sendMessage()}
-          className="flex-1 border rounded px-3 py-2"
-          placeholder="Type a message"
-        />
-        <button
-          onClick={sendMessage}
-          className="bg-green-500 text-white px-4 py-2 rounded"
-        >
-          Send
-        </button>
+            Send
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ const Home = () => {
   const navigate = useNavigate();
   const searchContainerRef = useRef(null);
 
+  
   useEffect(() => {
     const fetchMessages = async () => {
       try {

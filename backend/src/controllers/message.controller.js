@@ -232,16 +232,6 @@ const fetchAllMessagesfromGroup = asyncHandler(async (req, res) => {
                 localField: "receiverGroup",
                 foreignField: "_id",
                 as: "groupDetails",
-                pipeline:[
-                    {
-                        $project:{
-                            name: 1,
-                            owner: 1,
-                            admins: 1,
-                            members:1
-                        }
-                    }
-                ]
             }
         },
         {

@@ -2,7 +2,8 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Group } from "../models/groups.model.js";
-import {isValidObjectId} from "mongoose";
+import { User } from "../models/user.model.js";
+import mongoose, {isValidObjectId, Mongoose} from "mongoose";
 
 const createGroup = asyncHandler(async (req, res) => {
     const { name } = req.body;
@@ -159,8 +160,89 @@ const deleteGroup = asyncHandler( async (req,res) => {
     .json(new ApiResponse(200,deletedGroupDetails,"Group deleted"))
 
 })
+
+const groupDetails = asyncHandler( async(req,res)=>{
+    const {group_id} = req.params
+    const group = await Group.findById(group_id);
+    if(!group){
+        throw new ApiError(404,"We are not able to find the group")
+    }
+
+    const ownerDeatils = await User.findById(group.owner).select("-password -refreshToken -createdAt -updatedAt -_v")
+    // console.log(ownerDeatils);
+    
+    const details = await Group.aggregate([
+        {
+            $match:{
+                _id: new mongoose.Types.ObjectId(group_id)
+            }
+        },
+        {
+            $lookup: {
+                from: "users",
+                foreignField: "_id",
+                localField: "members",
+                as: "membersDeatils",
+                pipeline: [
+                    {
+                        $project:{
+                            _id: 1,
+                            username: 1,
+                            email: 1
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            $lookup: {
+                from: "users",
+                foreignField: "_id",
+                localField: "admins",
+                as: "adminsDeatils",
+                pipeline: [
+                    {
+                        $project:{
+                            _id: 1,
+                            username: 1,
+                            email: 1
+                        }
+                    }
+                ]
+
+            }
+        },
+        {
+            $addFields:{
+                owner: ownerDeatils
+            }
+        },
+        {
+            $project:{
+                _id: 1,
+                name: 1,
+                membersDeatils: 1,
+                adminsDeatils: 1,
+                owner: 1
+            }
+        }
+    ])
+
+    if (!details || details.length === 0) {
+    throw new ApiError(501, "Cannot find the members and admins at this moment");
+    }
+
+    
+    res.status(200).json({
+        success: true,
+        data: details[0], 
+    });
+
+
+})
 export {
     createGroup,
+    groupDetails,
     AddMembersToGroup,
     removeMembersToGroup,
     promoteToGroupAdmin,

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { isLoggedIn } from "../middlewares/auth.middleware.js";
 import { 
     createGroup,
+    groupDetails,
     AddMembersToGroup,
     removeMembersToGroup,
     promoteToGroupAdmin,
@@ -17,6 +18,8 @@ const router = Router();
 router.use(isLoggedIn);
 
 router.route('/createGroup').post(createGroup)
+
+router.route('/groupDetails/:group_id').get(groupDetails)
 
 router.route('/members/:group_id/:member_id').patch(checkOwner(Group,'params.group_id',"owner"),AddMembersToGroup).delete(checkOwner(Group,'params.group_id',"owner"),removeMembersToGroup)
 
