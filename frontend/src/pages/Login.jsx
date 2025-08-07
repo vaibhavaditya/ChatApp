@@ -8,7 +8,7 @@ const LoginPage = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const navigate = useNavigate(); // <-- Initialize
+  const navigate = useNavigate(); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,8 +24,7 @@ const LoginPage = () => {
 
       console.log("Login success:", response.data);
       
-      // ✅ Redirect to home after successful login
-      navigate("/home");
+      navigate("/");
     } catch (err) {
       setError(err.response?.data?.message || "Login failed");
       console.error("Login error:", err);

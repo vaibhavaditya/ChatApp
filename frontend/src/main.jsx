@@ -18,8 +18,8 @@ import {
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route path='/' element={<App />}>
-      <Route index element={<LoginPage />} />
-      <Route path='home' element={<Home />} />
+      <Route index element={<Home />} />
+      <Route path='login' element={<LoginPage />} />
       <Route path='register' element={<RegisterPage />} />
       <Route path='chat/:userId' element={<ChatPage />} />
       <Route path='group/:groupId' element={<GroupPage />} />

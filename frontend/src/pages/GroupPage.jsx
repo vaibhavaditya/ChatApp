@@ -26,23 +26,24 @@ const GroupPage = () => {
     owner: null,
   });
 
+  const isAdminOrOwner =
+    currentUser &&
+    groupDetails.owner &&
+    (
+      currentUser._id.toString() === groupDetails.owner._id.toString() ||
+      groupDetails.adminsDeatils.some(admin => admin._id.toString() === currentUser._id.toString())
+    );
+
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     const fetchGroupChat = async () => {
       try {
-        const userRes = await axios.get("/api/users/me", {
-          withCredentials: true,
-        });
+        const userRes = await axios.get("/api/users/me", { withCredentials: true });
         setCurrentUser(userRes.data.data);
 
-        const res = await axios.get(`/api/messages/group/${receiver_id}`, {
-          withCredentials: true,
-        });
-
-        const details = await axios.get(`/api/groups/groupDetails/${receiver_id}`, {
-          withCredentials: true,
-        });
+        const res = await axios.get(`/api/messages/group/${receiver_id}`, { withCredentials: true });
+        const details = await axios.get(`/api/groups/groupDetails/${receiver_id}`, { withCredentials: true });
 
         setGroupDetails(details.data.data);
         setMessages(res.data.data);
@@ -213,60 +214,65 @@ const GroupPage = () => {
       {/* LEFT SIDEBAR */}
       <div className="w-1/4 bg-white border-r p-4 overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">{groupName}</h2>
+
         {/* Add Member */}
-        <div className="w-full max-w-md">
-          <h3 className="text-lg font-semibold mb-2">Add Member to Group</h3>
-          <div className="flex gap-2 items-center mb-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyUp={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="Search by username"
-              className="flex-1 border rounded px-3 py-2"
-            />
+        {isAdminOrOwner && (
+          <div className="w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-2">Add Member to Group</h3>
+            <div className="flex gap-2 items-center mb-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyUp={(e) => e.key === "Enter" && handleSearch()}
+                placeholder="Search by username"
+                className="flex-1 border rounded px-3 py-2"
+              />
+              <button
+                onClick={handleSearch}
+                className="bg-blue-500 text-white px-4 py-2 rounded"
+              >
+                Search
+              </button>
+            </div>
+
+            {searchResults.length > 0 && (
+              <div className="mb-4 border rounded p-2 max-h-40 overflow-y-auto">
+                {searchResults.map((user) => (
+                  <div
+                    key={user._id}
+                    className={`p-2 cursor-pointer hover:bg-gray-100 ${
+                      selectedUser?._id === user._id ? "bg-blue-50" : ""
+                    }`}
+                    onClick={() => setSelectedUser(user)}
+                  >
+                    <p className="font-medium">{user.username}</p>
+                    <p className="text-sm text-gray-600">{user.email}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedUser && (
+              <div className="mb-4 p-3 bg-gray-50 rounded border">
+                <p className="font-medium">Selected User:</p>
+                <p>{selectedUser.username} ({selectedUser.email})</p>
+              </div>
+            )}
+
             <button
-              onClick={handleSearch}
-              className="bg-blue-500 text-white px-4 py-2 rounded"
+              onClick={handleAddMember}
+              disabled={!selectedUser}
+              className={`w-full py-2 rounded ${
+                selectedUser ? "bg-green-500 text-white" : "bg-gray-300 cursor-not-allowed"
+              }`}
             >
-              Search
+              Add Member
             </button>
           </div>
+        )}
 
-          {searchResults.length > 0 && (
-            <div className="mb-4 border rounded p-2 max-h-40 overflow-y-auto">
-              {searchResults.map((user) => (
-                <div
-                  key={user._id}
-                  className={`p-2 cursor-pointer hover:bg-gray-100 ${
-                    selectedUser?._id === user._id ? "bg-blue-50" : ""
-                  }`}
-                  onClick={() => setSelectedUser(user)}
-                >
-                  <p className="font-medium">{user.username}</p>
-                  <p className="text-sm text-gray-600">{user.email}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {selectedUser && (
-            <div className="mb-4 p-3 bg-gray-50 rounded border">
-              <p className="font-medium">Selected User:</p>
-              <p>{selectedUser.username} ({selectedUser.email})</p>
-            </div>
-          )}
-
-          <button
-            onClick={handleAddMember}
-            disabled={!selectedUser}
-            className={`w-full py-2 rounded ${
-              selectedUser ? "bg-green-500 text-white" : "bg-gray-300 cursor-not-allowed"
-            }`}
-          >
-            Add Member
-          </button>
-        </div>
+        {/* Group Details */}
         <div className="mb-4">
           <p className="font-semibold text-gray-700">Group Name:</p>
           <p className="text-gray-800">{groupDetails.name}</p>
@@ -285,20 +291,22 @@ const GroupPage = () => {
             {groupDetails.adminsDeatils.map((admin) => (
               <li key={admin._id} className="flex justify-between items-center">
                 <span>{admin.username}</span>
-                <div className="space-x-1">
-                  <button
-                    onClick={() => handleDemoteToMember(admin._id)}
-                    className="bg-yellow-400 text-white px-2 py-1 rounded text-sm"
-                  >
-                    Demote
-                  </button>
-                  <button
-                    onClick={() => handleRemoveAdmin(admin._id)}
-                    className="bg-red-500 text-white px-2 py-1 rounded text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
+                {isAdminOrOwner && (
+                  <div className="space-x-1">
+                    <button
+                      onClick={() => handleDemoteToMember(admin._id)}
+                      className="bg-yellow-400 text-white px-2 py-1 rounded text-sm"
+                    >
+                      Demote
+                    </button>
+                    <button
+                      onClick={() => handleRemoveAdmin(admin._id)}
+                      className="bg-red-500 text-white px-2 py-1 rounded text-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -310,26 +318,26 @@ const GroupPage = () => {
             {groupDetails.membersDeatils.map((member) => (
               <li key={member._id} className="flex justify-between items-center">
                 <span>{member.username}</span>
-                <div className="space-x-1">
-                  <button
-                    onClick={() => handlePromoteToAdmin(member._id)}
-                    className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
-                  >
-                    Promote
-                  </button>
-                  <button
-                    onClick={() => handleRemoveMember(member._id)}
-                    className="bg-red-500 text-white px-2 py-1 rounded text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
+                {isAdminOrOwner && (
+                  <div className="space-x-1">
+                    <button
+                      onClick={() => handlePromoteToAdmin(member._id)}
+                      className="bg-blue-500 text-white px-2 py-1 rounded text-sm"
+                    >
+                      Promote
+                    </button>
+                    <button
+                      onClick={() => handleRemoveMember(member._id)}
+                      className="bg-red-500 text-white px-2 py-1 rounded text-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         </div>
-
-        
       </div>
 
       {/* RIGHT CHAT AREA */}

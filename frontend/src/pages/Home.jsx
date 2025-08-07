@@ -82,7 +82,12 @@ const Home = () => {
           groupChats: groupList,
         });
       } catch (err) {
-        console.error(err);
+        // console.error(err);
+        // alert("login first");
+        if (err.response?.status === 401) {
+          navigate("/login");  // Redirect to login
+          return;  // Exit function early
+        }
         setError("Failed to load messages");
       } finally {
         setLoading(false);
