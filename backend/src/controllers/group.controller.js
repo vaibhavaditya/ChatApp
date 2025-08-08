@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Group } from "../models/groups.model.js";
 import { User } from "../models/user.model.js";
+import { Message } from "../models/message.model.js";
 import mongoose, {isValidObjectId, Mongoose} from "mongoose";
 
 const createGroup = asyncHandler(async (req, res) => {
@@ -154,7 +155,8 @@ const deleteGroup = asyncHandler( async (req,res) => {
     const group = req.resource
 
     const deletedGroupDetails = await group.deleteOne();
-
+    await Message.deleteMany({ receiverGroup: group._id });
+    
     return res
     .status(200)
     .json(new ApiResponse(200,deletedGroupDetails,"Group deleted"))

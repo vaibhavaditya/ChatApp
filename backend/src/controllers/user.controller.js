@@ -5,11 +5,11 @@ import {ApiResponse} from "../utils/ApiResponse.js";
 import { isValidObjectId } from "mongoose";
 
 const registerUser = asyncHandler(async (req,res)=>{
-    const {username,email,password} = req.body;
+    const {username,email,password,publicKey} = req.body;
     // console.log(username);
     
-    if([username,email,password].some((val) => val.trim()) === ""){
-        throw new ApiError(400,"Need all credentials given in the input")
+    if([username,email,password,publicKey].some((val) => val.trim() === "")){
+        throw new ApiError(400,"Need all credentials given in the input, including publicKey")
     }
 
     const existed = await User.findOne({
@@ -23,7 +23,8 @@ const registerUser = asyncHandler(async (req,res)=>{
     const user = await User.create({
         username,
         email,
-        password
+        password,
+        publicKey
     }).select("-password")
 
     if(!user){
@@ -147,11 +148,24 @@ const searchUsers = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, users, "Users fetched"));
 });
 
+const getUserPublicKey = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+    if (!username || username.trim() === "") {
+        throw new ApiError(400, "Username parameter is required");
+    }
+    const user = await User.findOne({ username }).select("publicKey");
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+    return res.status(200).json(new ApiResponse(200, { publicKey: user.publicKey }, "Fetched user public key"));
+});
+
 export {
     registerUser,
     loginUser,
     logoutUser,
     getCurrentUser,
     getUserDetails,
-    searchUsers
+    searchUsers,
+    getUserPublicKey
 }

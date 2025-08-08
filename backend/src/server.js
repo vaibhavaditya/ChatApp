@@ -5,10 +5,12 @@ import app from './app.js';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { setupSocket } from './socket/index.js'
+import { connectRedisDB } from './dbs/redis.db.js';
 
 const startApp = async() => {
     try {
         await connectDB()
+        await connectRedisDB()
         const port = process.env.PORT || 3000
 
         const server = createServer(app);
