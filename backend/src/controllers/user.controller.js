@@ -148,17 +148,7 @@ const searchUsers = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, users, "Users fetched"));
 });
 
-const getUserPublicKey = asyncHandler(async (req, res) => {
-    const { username } = req.params;
-    if (!username || username.trim() === "") {
-        throw new ApiError(400, "Username parameter is required");
-    }
-    const user = await User.findOne({ username }).select("publicKey");
-    if (!user) {
-        throw new ApiError(404, "User not found");
-    }
-    return res.status(200).json(new ApiResponse(200, { publicKey: user.publicKey }, "Fetched user public key"));
-});
+
 
 export {
     registerUser,
@@ -166,6 +156,5 @@ export {
     logoutUser,
     getCurrentUser,
     getUserDetails,
-    searchUsers,
-    getUserPublicKey
+    searchUsers
 }
