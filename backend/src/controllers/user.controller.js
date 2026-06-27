@@ -5,12 +5,12 @@ import {ApiResponse} from "../utils/ApiResponse.js";
 import { isValidObjectId } from "mongoose";
 
 const registerUser = asyncHandler(async (req,res)=>{
-    const {username,email,password,publicKey} = req.body;
+    const {username,email,password} = req.body;
     // console.log(username);
     
-    if([username,email,password,publicKey].some((val) => val.trim() === "")){
-        throw new ApiError(400,"Need all credentials given in the input, including publicKey")
-    }
+    if ([username, email, password].some((val) => !val || val.trim() === "")) {
+    throw new ApiError(400, "All fields are required");
+}
 
     const existed = await User.findOne({
         $or:[{username},{email}]
@@ -24,8 +24,7 @@ const registerUser = asyncHandler(async (req,res)=>{
         username,
         email,
         password,
-        publicKey
-    }).select("-password")
+    })
 
     if(!user){
         throw new ApiError(504,"Cannot created at this momemt please try again")
